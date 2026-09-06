@@ -24,6 +24,18 @@ const el = (tag, cls, text) => {
   return n;                                  // content is untrusted output
 };
 
+const SVGNS = 'http://www.w3.org/2000/svg';
+const XLINKNS = 'http://www.w3.org/1999/xlink';
+function mascotIcon(key) {
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('class', 'ag-glyph-svg');
+  const use = document.createElementNS(SVGNS, 'use');
+  use.setAttributeNS(XLINKNS, 'href', `#mascot-${key}`);
+  use.setAttribute('href', `#mascot-${key}`);
+  svg.append(use);
+  return svg;
+}
+
 const state = {
   status: null, personas: {}, checkpoints: [], selected: null,
   results: {}, graph: null,
@@ -154,7 +166,9 @@ function renderCast() {
     }
 
     const head = el('div', 'ag-head');
-    head.append(el('div', 'ag-glyph', p.glyph || key.slice(0, 2).toUpperCase()));
+    const glyph = el('div', 'ag-glyph');
+    glyph.append(mascotIcon(key));
+    head.append(glyph);
     const names = el('div');
     names.append(el('div', 'ag-name', p.name), el('div', 'ag-role', (p.role || '').toUpperCase()));
     head.append(names);
@@ -462,6 +476,13 @@ async function loadLedger() {
     chain.append(row);
   });
   if (!data.history?.length) chain.append(el('div', 'empty', 'No commits yet.'));
+
+  const reqs = data.counts?.requirements || 0;
+  const cps = data.counts?.checkpoints || 0;
+  const banner = $('#banner-trust');
+  banner.textContent = reqs > 0
+    ? `${reqs} requirement${reqs === 1 ? '' : 's'} verified across ${cps} checkpoint${cps === 1 ? '' : 's'} — every one traceable to its evidence.`
+    : 'No audits committed yet — run one above and this line updates with a real count.';
 }
 
 async function verifyChain() {

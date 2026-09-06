@@ -6,7 +6,7 @@
 <title>Witness — Checkpoint-Native Release Auditor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
@@ -32,26 +32,81 @@
 
 <div class="scanline" aria-hidden="true"></div>
 
+<!-- Mascot sprite sheet - flat geometric glyphs, one distinguishing prop each.
+     Original artwork, not the Claude/Anthropic mark. Colored via currentColor
+     so each card can tint its own mascot with its --accent. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mascot-auditor" viewBox="0 0 48 48">
+      <circle cx="22" cy="24" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="17" cy="22" r="1.6" fill="currentColor"/>
+      <circle cx="27" cy="22" r="1.6" fill="currentColor"/>
+      <circle cx="33" cy="31" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/>
+      <line x1="37" y1="35" x2="42.5" y2="40.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="mascot-watchman" viewBox="0 0 48 48">
+      <circle cx="21" cy="23" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="16" cy="21" r="1.6" fill="currentColor"/>
+      <circle cx="26" cy="21" r="1.6" fill="currentColor"/>
+      <path d="M32 27 L38 29.4 V35 C38 39 35 41.6 32 43 C29 41.6 26 39 26 35 V29.4 Z"
+            fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="32" y1="31" x2="32" y2="36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="32" cy="39" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="mascot-archivist" viewBox="0 0 48 48">
+      <circle cx="22" cy="23" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="17" cy="21" r="1.6" fill="currentColor"/>
+      <circle cx="27" cy="21" r="1.6" fill="currentColor"/>
+      <path d="M25 32 L33 30 V40 L25 42 Z" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.7"/>
+      <path d="M41 32 L33 30 V40 L41 42 Z" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.7"/>
+    </symbol>
+    <symbol id="mascot-messenger" viewBox="0 0 48 48">
+      <circle cx="22" cy="23" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="17" cy="21" r="1.6" fill="currentColor"/>
+      <circle cx="27" cy="21" r="1.6" fill="currentColor"/>
+      <rect x="25" y="30" width="17" height="11.5" rx="1.5" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-width="1.7"/>
+      <path d="M25 31 L33.5 38 L42 31" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="mascot-ghost" viewBox="0 0 48 48">
+      <circle cx="21" cy="23" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="16" cy="21" r="1.6" fill="currentColor"/>
+      <circle cx="26" cy="21" r="1.6" fill="currentColor"/>
+      <rect x="29" y="30" width="6" height="9" rx="1.3" fill="currentColor" fill-opacity=".2" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M35 32 L42 28.5 V40.5 L35 37 Z" fill="currentColor" fill-opacity=".22" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="mascot-referee" viewBox="0 0 48 48">
+      <circle cx="22" cy="23" r="15" fill="currentColor" fill-opacity=".08" stroke="currentColor" stroke-width="2"/>
+      <circle cx="17" cy="21" r="1.6" fill="currentColor"/>
+      <circle cx="27" cy="21" r="1.6" fill="currentColor"/>
+      <path d="M27 31 H36 M36 31 L33 28 M36 31 L33 34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M39 39 H30 M30 39 L33 36 M30 39 L33 42" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
 <!-- ── nav ───────────────────────────────────────────────────────── -->
 <header class="nav">
   <div class="nav-left">
-    <a class="nav-back" href="#top" aria-label="Top">&larr;</a>
     <div class="wordmark">
       <span class="wm-serif">W</span><span class="wm-italic">it</span><span class="wm-dot">ness</span>
     </div>
     <span class="chip">CHECKPOINT&nbsp;AUDITOR</span>
   </div>
-  <nav class="nav-right">
-    <a class="nav-link" href="#cast">CAST</a>
-    <a class="nav-link" href="#graph">GRAPH</a>
-    <a class="nav-link" href="#ledger">LEDGER</a>
-    <a class="nav-link" href="#databricks">DATABRICKS</a>
+  <nav class="nav-center">
+    <a class="nav-link" href="#cast">Cast</a>
+    <a class="nav-link" href="#graph">Graph</a>
+    <a class="nav-link" href="#ledger">Ledger</a>
+    <a class="nav-link" href="#databricks">Databricks</a>
+  </nav>
+  <div class="nav-right">
     <button class="pill" id="chain-pill" title="Re-verify the ledger hash chain">
       <span class="pill-dot" id="chain-dot"></span>
       <span id="chain-label">CHAIN</span>
     </button>
+    <a class="nav-cta nav-cta-ghost" href="#ledger">View ledger</a>
+    <a class="nav-cta nav-cta-solid" href="#checkpoints">Run risk check</a>
     <div class="avatar" id="avatar" title="Entire capability status">W</div>
-  </nav>
+  </div>
 </header>
 
 <main id="top">
@@ -61,18 +116,16 @@
   <div class="hero-grid" aria-hidden="true"></div>
 
   <div class="hero-inner">
-    <p class="eyebrow">TRACK 1 · CHECKPOINT-NATIVE DEVELOPER EXPERIENCE</p>
+    <h1 class="title">Every verdict traces to a command you can re&#8209;run.</h1>
+    <p class="tagline">
+      Witness turns Entire checkpoints and Entire Graph evidence into a
+      release-readiness record that re-checks itself — so a claim from this
+      morning is still true this afternoon, or it says exactly why it isn't.
+    </p>
 
-    <h1 class="title">
-      <span class="t-row">
-        <span class="t-serif">W</span><span class="t-italic">it</span>
-      </span>
-      <span class="t-row t-matrix">ness</span>
-      <span class="t-row t-year">2026</span>
-    </h1>
-
-    <div class="hero-side">
-      <p class="tagline">Every verdict traces<br>to a command you<br>can re-run.</p>
+    <div class="hero-actions">
+      <a class="nav-cta nav-cta-solid hero-cta" href="#checkpoints">Run risk check</a>
+      <a class="nav-cta nav-cta-ghost hero-cta" href="#graph">Explore the graph</a>
     </div>
 
     <div class="metabar" id="metabar">
@@ -81,6 +134,45 @@
       <div class="meta-cell"><span class="meta-k">REASONING</span><span class="meta-v" id="m-agents">—</span></div>
       <div class="meta-cell"><span class="meta-k">WAREHOUSE</span><span class="meta-v" id="m-dbx">—</span></div>
     </div>
+  </div>
+</section>
+
+<!-- ── capability grid: the six agents, at a glance ─────────────── -->
+<section class="capgrid-wrap">
+  <div class="capgrid" id="capgrid">
+    <a class="cap" href="#cast" data-persona="auditor">
+      <svg class="cap-ico" style="color:#00C8FF"><use href="#mascot-auditor"/></svg>
+      <span class="cap-label">Requirement checks</span>
+    </a>
+    <a class="cap" href="#cast" data-persona="watchman">
+      <svg class="cap-ico" style="color:#FF9E3D"><use href="#mascot-watchman"/></svg>
+      <span class="cap-label">Risk scoring</span>
+    </a>
+    <a class="cap" href="#cast" data-persona="archivist">
+      <svg class="cap-ico" style="color:#B78CFF"><use href="#mascot-archivist"/></svg>
+      <span class="cap-label">Assumption tracking</span>
+    </a>
+    <a class="cap" href="#cast" data-persona="messenger">
+      <svg class="cap-ico" style="color:#6FE3B0"><use href="#mascot-messenger"/></svg>
+      <span class="cap-label">Handoff packets</span>
+    </a>
+    <a class="cap" href="#cast" data-persona="ghost">
+      <svg class="cap-ico" style="color:#7FFFD4"><use href="#mascot-ghost"/></svg>
+      <span class="cap-label">Dead-end detection</span>
+    </a>
+    <a class="cap" href="#cast" data-persona="referee">
+      <svg class="cap-ico" style="color:#FF5D6C"><use href="#mascot-referee"/></svg>
+      <span class="cap-label">Goal-drift compare</span>
+    </a>
+  </div>
+</section>
+
+<!-- ── full-bleed banner ────────────────────────────────────────── -->
+<section class="banner">
+  <div class="banner-inner">
+    <h2 class="banner-h" id="banner-h">Nothing is marked done until something re-checks it.</h2>
+    <p class="banner-trust" id="banner-trust">Awaiting a ledger read…</p>
+    <a class="nav-cta nav-cta-solid" href="#graph">See a claim go stale</a>
   </div>
 </section>
 
@@ -97,7 +189,7 @@
       <div class="strip-sub" id="strip-sub">Select a checkpoint to begin</div>
     </div>
   </div>
-  <button class="strip-cta" id="run-all">RUN FULL AUDIT →</button>
+  <button class="strip-cta" id="run-all">RUN FULL AUDIT</button>
 </section>
 
 <!-- ── checkpoints ──────────────────────────────────────────────── -->
@@ -115,7 +207,7 @@
 <section class="block" id="cast">
   <div class="block-head">
     <h2 class="sec">THE CAST</h2>
-    <span class="sec-note">six personas · one orchestrator · role-scoped prompts</span>
+    <span class="sec-note">Six role-scoped personas, run by one orchestrator</span>
   </div>
   <div class="cast-grid" id="cast-grid"></div>
 </section>
@@ -162,7 +254,7 @@
 <section class="block" id="ledger">
   <div class="block-head">
     <h2 class="sec">THE AUDIT LEDGER</h2>
-    <span class="sec-note">a separate git repo · the hash chain is the tamper evidence</span>
+    <span class="sec-note">A separate git repo — the hash chain is the tamper evidence</span>
   </div>
   <div class="ledger-wrap">
     <div class="ledger-stats" id="ledger-stats"></div>
