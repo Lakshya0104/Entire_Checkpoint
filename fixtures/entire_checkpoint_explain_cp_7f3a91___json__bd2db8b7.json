@@ -1,0 +1,21 @@
+{
+  "id": "ev_seed",
+  "command": [
+    "entire",
+    "checkpoint",
+    "explain",
+    "cp_7f3a91",
+    "--json"
+  ],
+  "command_str": "entire checkpoint explain cp_7f3a91 --json",
+  "status": "ok",
+  "exit_code": 0,
+  "stdout": "{\n  \"id\": \"cp_7f3a91\",\n  \"session_id\": \"sess_claude_0912\",\n  \"branch\": \"feat/token-refresh\",\n  \"author\": \"claude-code\",\n  \"created_at\": \"2026-09-06T09:12:00Z\",\n  \"summary\": \"Add refresh-token rotation to session auth\",\n  \"files_touched\": [\n    \"auth/session.py\",\n    \"auth/tokens.py\",\n    \"api/routes.py\",\n    \"tests/test_session.py\"\n  ],\n  \"tests\": {\n    \"ran\": true,\n    \"passed\": 11,\n    \"failed\": 1,\n    \"failing\": [\n      \"tests/test_session.py::test_rotation_revokes_old_token\"\n    ]\n  }\n}",
+  "stderr": "",
+  "stdout_sha256": "4941a07417ac4631dc662d571c3f97f9396380a3e9268b23fa6f841e7d00d461",
+  "duration_ms": 142,
+  "captured_at": "2026-09-06T09:12:00+00:00",
+  "cwd": ".",
+  "source": "live",
+  "secret_findings": []
+}

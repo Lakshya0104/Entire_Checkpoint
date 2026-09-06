@@ -1,0 +1,18 @@
+# The audit-ledger is a SEPARATE git repo (CLAUDE.md §5). It must never be
+# committed into the app repo - doing so would break the tamper-evidence
+# claim, since its history would then be rewritable from here.
+audit-ledger/
+
+# Local Databricks mirror
+*.mirror.db
+.mirror.db
+
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+shot.js
+shot2.js

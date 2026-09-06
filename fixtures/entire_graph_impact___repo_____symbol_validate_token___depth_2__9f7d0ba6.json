@@ -1,0 +1,25 @@
+{
+  "id": "ev_seed",
+  "command": [
+    "entire",
+    "graph",
+    "impact",
+    "--repo",
+    ".",
+    "--symbol",
+    "validate_token",
+    "--depth",
+    "2"
+  ],
+  "command_str": "entire graph impact --repo . --symbol validate_token --depth 2",
+  "status": "ok",
+  "exit_code": 0,
+  "stdout": "Impact analysis: validate_token  (auth/session.py:88)\nDepth 2 \u00b7 4 direct callers \u00b7 2 transitive\n\nCallers:\n  api/routes.py          -> require_auth\n  api/routes.py          -> login_handler\n  auth/session.py        -> refresh_session\n  middleware/guard.py    -> check_request\n\nCallees:\n  auth/tokens.py         -> decode_token\n  auth/tokens.py         -> is_revoked\n\nType consumers:\n  api/schemas.py         -> SessionClaims\n",
+  "stderr": "",
+  "stdout_sha256": "4e0c54789c22a60a2b43d38d5df244eb8fbdedf63615398f151abd35addfdc5f",
+  "duration_ms": 142,
+  "captured_at": "2026-09-06T09:12:00+00:00",
+  "cwd": ".",
+  "source": "live",
+  "secret_findings": []
+}

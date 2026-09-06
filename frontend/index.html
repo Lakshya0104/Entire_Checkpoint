@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Witness — Checkpoint-Native Release Auditor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+
+<!-- Topographic field: feTurbulence banded into contour lines. -->
+<svg class="topo" aria-hidden="true" preserveAspectRatio="none">
+  <defs>
+    <filter id="contours" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0016 0.0026"
+                    numOctaves="4" seed="17" result="noise"/>
+      <!-- Sawtooth the alpha into repeating ramps... -->
+      <feComponentTransfer in="noise" result="bands">
+        <feFuncA type="table"
+          tableValues="0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0"/>
+      </feComponentTransfer>
+      <!-- ...then threshold hard so only the ramp peaks survive as thin lines. -->
+      <feColorMatrix in="bands" type="matrix"
+        values="0 0 0 0 0.55  0 0 0 0 0.60  0 0 0 0 0.68  0 0 0 7 -6.1"/>
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" filter="url(#contours)"/>
+</svg>
+
+<div class="scanline" aria-hidden="true"></div>
+
+<!-- ── nav ───────────────────────────────────────────────────────── -->
+<header class="nav">
+  <div class="nav-left">
+    <a class="nav-back" href="#top" aria-label="Top">&larr;</a>
+    <div class="wordmark">
+      <span class="wm-serif">W</span><span class="wm-italic">it</span><span class="wm-dot">ness</span>
+    </div>
+    <span class="chip">CHECKPOINT&nbsp;AUDITOR</span>
+  </div>
+  <nav class="nav-right">
+    <a class="nav-link" href="#cast">CAST</a>
+    <a class="nav-link" href="#graph">GRAPH</a>
+    <a class="nav-link" href="#ledger">LEDGER</a>
+    <a class="nav-link" href="#databricks">DATABRICKS</a>
+    <button class="pill" id="chain-pill" title="Re-verify the ledger hash chain">
+      <span class="pill-dot" id="chain-dot"></span>
+      <span id="chain-label">CHAIN</span>
+    </button>
+    <div class="avatar" id="avatar" title="Entire capability status">W</div>
+  </nav>
+</header>
+
+<main id="top">
+
+<!-- ── hero ──────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-grid" aria-hidden="true"></div>
+
+  <div class="hero-inner">
+    <p class="eyebrow">TRACK 1 · CHECKPOINT-NATIVE DEVELOPER EXPERIENCE</p>
+
+    <h1 class="title">
+      <span class="t-row">
+        <span class="t-serif">W</span><span class="t-italic">it</span>
+      </span>
+      <span class="t-row t-matrix">ness</span>
+      <span class="t-row t-year">2026</span>
+    </h1>
+
+    <div class="hero-side">
+      <p class="tagline">Every verdict traces<br>to a command you<br>can re-run.</p>
+    </div>
+
+    <div class="metabar" id="metabar">
+      <div class="meta-cell"><span class="meta-k">ENTIRE</span><span class="meta-v" id="m-entire">probing…</span></div>
+      <div class="meta-cell"><span class="meta-k">LEDGER</span><span class="meta-v" id="m-ledger">—</span></div>
+      <div class="meta-cell"><span class="meta-k">REASONING</span><span class="meta-v" id="m-agents">—</span></div>
+      <div class="meta-cell"><span class="meta-k">WAREHOUSE</span><span class="meta-v" id="m-dbx">—</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── live strip ────────────────────────────────────────────────── -->
+<section class="strip" id="strip">
+  <div class="strip-left">
+    <span class="strip-sq"></span>
+    <span class="strip-ico">▤</span>
+    <div>
+      <div class="strip-title">
+        <span id="strip-title">Audit pipeline</span>
+        <span class="live" id="strip-badge">IDLE</span>
+      </div>
+      <div class="strip-sub" id="strip-sub">Select a checkpoint to begin</div>
+    </div>
+  </div>
+  <button class="strip-cta" id="run-all">RUN FULL AUDIT →</button>
+</section>
+
+<!-- ── checkpoints ──────────────────────────────────────────────── -->
+<section class="block" id="checkpoints">
+  <div class="block-head">
+    <h2 class="sec">THE CHECKPOINTS</h2>
+    <button class="ghost-btn" id="reload-cp">RELOAD</button>
+  </div>
+  <div class="cp-list" id="cp-list">
+    <div class="empty">Loading checkpoints…</div>
+  </div>
+</section>
+
+<!-- ── agent cast ───────────────────────────────────────────────── -->
+<section class="block" id="cast">
+  <div class="block-head">
+    <h2 class="sec">THE CAST</h2>
+    <span class="sec-note">six personas · one orchestrator · role-scoped prompts</span>
+  </div>
+  <div class="cast-grid" id="cast-grid"></div>
+</section>
+
+<!-- ── graph ────────────────────────────────────────────────────── -->
+<section class="block" id="graph">
+  <div class="block-head">
+    <h2 class="sec">DOES THIS CLAIM STILL HOLD?</h2>
+    <span class="sec-note">blast radius at checkpoint time vs. HEAD</span>
+  </div>
+
+  <div class="graph-bar">
+    <input class="inp" id="g-symbol" placeholder="symbol (e.g. process_payment)" spellcheck="false">
+    <input class="inp" id="g-checkpoint" placeholder="checkpoint id" spellcheck="false">
+    <button class="ghost-btn" id="g-snapshot">CAPTURE SNAPSHOT</button>
+    <button class="solid-btn" id="g-recheck">RE-CHECK AT HEAD</button>
+  </div>
+
+  <div class="graph-wrap">
+    <div class="graph-canvas">
+      <svg id="subgraph" viewBox="0 0 720 460" aria-label="Local blast radius subgraph"></svg>
+      <div class="legend">
+        <span><i class="sw sw-green"></i>holds</span>
+        <span><i class="sw sw-amber"></i>stale</span>
+        <span><i class="sw sw-red"></i>contradicted</span>
+        <span><i class="sw sw-grey"></i>unverified</span>
+      </div>
+    </div>
+    <aside class="graph-side" id="graph-side">
+      <div class="verdict-shell" id="verdict-shell">
+        <div class="verdict-label">STATUS</div>
+        <div class="verdict-value" id="verdict-value">NO SNAPSHOT</div>
+        <p class="verdict-reason" id="verdict-reason">
+          Capture a blast radius at checkpoint time, then re-check it at HEAD.
+          The diff is arithmetic — the reason it matters is the model's call.
+        </p>
+      </div>
+      <div class="delta-list" id="delta-list"></div>
+    </aside>
+  </div>
+</section>
+
+<!-- ── ledger ───────────────────────────────────────────────────── -->
+<section class="block" id="ledger">
+  <div class="block-head">
+    <h2 class="sec">THE AUDIT LEDGER</h2>
+    <span class="sec-note">a separate git repo · the hash chain is the tamper evidence</span>
+  </div>
+  <div class="ledger-wrap">
+    <div class="ledger-stats" id="ledger-stats"></div>
+    <div class="chain" id="chain"></div>
+  </div>
+</section>
+
+<!-- ── databricks ───────────────────────────────────────────────── -->
+<section class="block" id="databricks">
+  <div class="block-head">
+    <h2 class="sec">DATABRICKS</h2>
+    <span class="sec-note" id="dbx-note">delta tables mirrored from the ledger</span>
+  </div>
+  <div class="dbx-wrap">
+    <div class="dbx-tables" id="dbx-tables"></div>
+    <div class="dbx-genie">
+      <div class="genie-head">
+        <span class="genie-k">GENIE</span>
+        <select class="inp" id="genie-select"></select>
+        <button class="solid-btn" id="genie-run">ASK</button>
+      </div>
+      <div class="genie-sql" id="genie-sql"></div>
+      <div class="genie-out" id="genie-out"></div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>WITNESS · built for Bengaluru Tech Week Buildathon 2026</span>
+  <span id="foot-head">—</span>
+</footer>
+
+</main>
+
+<!-- ── corner utility discs ─────────────────────────────────────── -->
+<div class="disc disc-bl" id="disc-recheck" title="Re-run graph check">
+  <span class="disc-ico">◎</span><span class="disc-tx">RE-CHECK</span>
+</div>
+<div class="disc disc-br" id="disc-sync" title="Sync ledger to Databricks">
+  <span class="disc-ico">▦</span><span class="disc-tx">SYNC</span>
+</div>
+
+<!-- ── evidence drawer ──────────────────────────────────────────── -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-head">
+    <div>
+      <div class="drawer-k">EVIDENCE</div>
+      <div class="drawer-id" id="drawer-id">—</div>
+    </div>
+    <button class="ghost-btn" id="drawer-close">CLOSE</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</div>
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>

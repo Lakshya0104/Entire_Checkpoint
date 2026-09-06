@@ -1,0 +1,20 @@
+{
+  "id": "ev_seed",
+  "command": [
+    "entire",
+    "checkpoint",
+    "list",
+    "--json"
+  ],
+  "command_str": "entire checkpoint list --json",
+  "status": "ok",
+  "exit_code": 0,
+  "stdout": "{\n  \"checkpoints\": [\n    {\n      \"id\": \"cp_7f3a91\",\n      \"session_id\": \"sess_claude_0912\",\n      \"branch\": \"feat/token-refresh\",\n      \"author\": \"claude-code\",\n      \"created_at\": \"2026-09-06T09:12:00Z\",\n      \"summary\": \"Add refresh-token rotation to session auth\",\n      \"files_touched\": [\n        \"auth/session.py\",\n        \"auth/tokens.py\",\n        \"api/routes.py\",\n        \"tests/test_session.py\"\n      ]\n    },\n    {\n      \"id\": \"cp_2b8c04\",\n      \"session_id\": \"sess_claude_1041\",\n      \"branch\": \"feat/token-refresh\",\n      \"author\": \"claude-code\",\n      \"created_at\": \"2026-09-06T10:41:00Z\",\n      \"summary\": \"Wire rotation into the login path, drop legacy validate_token\",\n      \"files_touched\": [\n        \"auth/session.py\",\n        \"api/routes.py\"\n      ]\n    }\n  ]\n}",
+  "stderr": "",
+  "stdout_sha256": "9716c380ae8bfe2aa8dcbcc57f82ad8a2de0a66019920a44d7a27771b2181e81",
+  "duration_ms": 142,
+  "captured_at": "2026-09-06T09:12:00+00:00",
+  "cwd": ".",
+  "source": "live",
+  "secret_findings": []
+}
