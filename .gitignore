@@ -3,6 +3,9 @@
 # claim, since its history would then be rewritable from here.
 audit-ledger/
 
+# Generated demo page (rebuild with tools/build_demo.py)
+witness-demo.html
+
 # Local Databricks mirror
 *.mirror.db
 .mirror.db

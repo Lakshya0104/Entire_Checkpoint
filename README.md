@@ -57,6 +57,22 @@ diff against).
 
 ---
 
+## Shareable demo build
+
+`tools/build_demo.py` runs the pipeline for real, captures every API response,
+and inlines them with the frontend into one self-contained HTML file:
+
+```bash
+python3 tools/build_demo.py --out witness-demo.html
+```
+
+The result is a *recording*, not a mock — real Entire output, the ledger's real
+commit hashes, a real `git fsck`, and a real stale-claim re-check. Its `api()`
+replays those responses instead of pretending to execute, and the page says so
+in a banner. Useful for sharing a link when the backend isn't reachable.
+
+---
+
 ## Architecture
 
 ```
