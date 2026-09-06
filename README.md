@@ -9,11 +9,17 @@ Developer Experience), with Databricks as the storage and analytics layer.
 
 ---
 
-## The one rule
+## The two rules
 
-Every requirement, status, and risk shown anywhere in this product traces back
-to a real `entire checkpoint` or `entire graph` command invocation. If the
-evidence for a claim is missing, the label is `unverified` — never a guess.
+**1. Every verdict traces to a command.** Every requirement, status and risk
+shown anywhere traces back to a real `entire checkpoint` or `entire graph`
+invocation. If the evidence is missing, the label is `unverified` — never a
+guess.
+
+**2. Nothing raw leaves the machine.** The Databricks mirror and the Claude API
+are external services. Neither receives a checkpoint transcript or raw prompt
+text. Both call through one shared `privacy.redact()`. Intent extraction happens
+on-machine, and only structured claims cross the boundary.
 
 This is enforced in three places, not just intended:
 
@@ -22,6 +28,9 @@ This is enforced in three places, not just intended:
 | Evidence records | `entire_adapter.py` | Every command run is captured with argv, exit code, duration, and a sha256 of raw stdout |
 | Citation enforcement | `agents.py::_enforce_citations` | A model finding citing an evidence id that doesn't exist is downgraded to `unverified` or dropped |
 | No-evidence short-circuit | `agents.py::AgentRunner.run` | If no input command succeeded, the persona returns verdict-free output without ever reaching the model |
+| Allowlist egress | `privacy.py::redact` | Outbound payloads are *built* from named fields, so an unanticipated field cannot ride along |
+| Final egress gate | `privacy.py::assert_no_raw_text` | Raises if raw text survived into a payload about to leave |
+| Partial-context downgrade | `agents.py::_apply_partial_context` | Under withheld input, affirming labels become `redacted` and risk scores become `null` — enforced in code, not left to the model |
 
 `test_hallucinated_citation_downgrades_auditor_finding` and
 `test_no_usable_evidence_means_no_verdict` keep those honest.
@@ -98,6 +107,7 @@ backend/witness/
   entire_adapter.py   shells out to Entire; produces Evidence records
   redaction.py        secret-pattern + entropy scan; the write gate
   ledger.py           the separate append-only git repo
+  privacy.py          the shared egress boundary + on-machine intent extraction
   agents.py           six personas, role-scoped prompts, citation enforcement
   graph_check.py      blast-radius snapshot, diff, stale detection
   databricks_sync.py  Delta tables + Genie queries (local SQLite mirror fallback)
@@ -107,23 +117,26 @@ backend/witness/
 frontend/             dashboard (no build step, no bundler)
 fixtures/             recorded command output — checkpoint-time state
 fixtures-head/        recorded command output — HEAD state, for the stale demo
+fixtures-redacted/    a checkpoint arriving with fields stripped
 ```
 
 ---
 
-## The cast
+## The six agents
 
-| Persona | Role | Output |
+| Agent | Prop | What it does |
 |---|---|---|
-| **The Auditor** | Intent-to-implementation verifier | per-requirement `satisfied`/`partial`/`unverified`/`contradicted` + evidence link |
-| **The Watchman** | Risk engine | release-readiness score, severity-banded risks (security band kept separate) |
-| **The Archivist** | Assumption ledger | assumptions with confidence, owner, expiry, and time-based decay |
-| **The Messenger** | Handoff packet | one-screen resume brief, with a redacted/full toggle |
-| **The Ghost** | Dead-end detector | hypothesis → attempt → why rejected |
-| **The Referee** | Goal-drift comparator | pre/post-curveball side-by-side |
+| **Auditor** | magnifying glass | Maps requirements to diff and test evidence, labels each `satisfied` / `partial` / `unverified` / `contradicted` / `redacted` |
+| **Riskbot** | shield | Blast radius, test status and stale assumptions into one evidence-linked score |
+| **Ledgerkeep** | open ledger | Source, confidence, owner and expiry per assumption |
+| **Scribe** | envelope | Handoff / resume packet |
+| **Sleuth** | flashlight | Unfinished work and unresolved requirements |
+| **Warden** | lock | Enforces redaction, blocks raw transcripts leaving the machine, marks context partial |
 
-The Referee's card is locked in the UI until 12:00 — it is the curveball answer
-mechanism and there is nothing real to show before the constraint arrives.
+One orchestrator with six labelled output sections — not six processes. Each has
+an original flat-geometry mascot sharing one silhouette, differentiated by its
+prop. The Referee (goal-drift comparator) predates the privacy boundary and
+stays available from the CLI and API.
 
 ---
 
@@ -144,6 +157,9 @@ mechanism and there is nothing real to show before the constraint arrives.
   refuses to bind a non-loopback host without it.
 - **The handoff packet has a redacted mode**, which withholds decision
   rationale — least-privilege for context sharing, not just readability.
+- **Redaction is an egress rule, not a storage rule.** The local ledger keeps
+  the full transcript; only what crosses a service boundary is stripped.
+  Confusing the two would destroy the audit trail.
 
 ---
 

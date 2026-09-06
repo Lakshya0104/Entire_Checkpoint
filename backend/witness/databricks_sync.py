@@ -27,37 +27,45 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .ledger import AuditLedger
+from .privacy import assert_no_raw_text, redact
 
 CATALOG = os.environ.get("DATABRICKS_CATALOG", "workspace")
 SCHEMA = os.environ.get("DATABRICKS_SCHEMA", "witness")
 
 # One schema, two dialects. Delta gets STRING/TIMESTAMP, SQLite gets TEXT.
 TABLES: dict[str, list[tuple[str, str]]] = {
+    # Columns are structured fields only. Free-text columns that used to live
+    # here - checkpoint summary, requirement rationale, evidence quotes, risk
+    # detail - were removed by the privacy boundary: Databricks is an external
+    # service and may not receive prose derived from a transcript. What remains
+    # is enough to answer the analytics questions and nothing more.
     "checkpoints": [
         ("id", "STRING"), ("session_id", "STRING"), ("branch", "STRING"),
         ("author", "STRING"), ("created_at", "STRING"),
-        ("files_touched", "STRING"), ("summary", "STRING"),
+        ("files_touched", "STRING"), ("context_state", "STRING"),
         ("ledger_commit", "STRING"), ("synced_at", "STRING"),
     ],
     "requirements": [
-        ("id", "STRING"), ("checkpoint_id", "STRING"), ("text", "STRING"),
-        ("status", "STRING"), ("rationale", "STRING"), ("evidence_ref", "STRING"),
-        ("evidence_quote", "STRING"), ("ledger_commit", "STRING"),
-        ("synced_at", "STRING"),
+        ("id", "STRING"), ("checkpoint_id", "STRING"),
+        ("requirement_text", "STRING"), ("status", "STRING"),
+        ("evidence_ref", "STRING"), ("context_state", "STRING"),
+        ("ledger_commit", "STRING"), ("synced_at", "STRING"),
     ],
     "assumptions": [
-        ("id", "STRING"), ("checkpoint_id", "STRING"), ("text", "STRING"),
-        ("source", "STRING"), ("category", "STRING"), ("confidence", "DOUBLE"),
-        ("decayed_confidence", "DOUBLE"), ("owner", "STRING"),
-        ("status", "STRING"), ("symbol", "STRING"), ("validation", "STRING"),
+        ("id", "STRING"), ("checkpoint_id", "STRING"),
+        ("assumption_text", "STRING"), ("category", "STRING"),
+        ("confidence", "DOUBLE"), ("decayed_confidence", "DOUBLE"),
+        ("owner", "STRING"), ("status", "STRING"), ("symbol", "STRING"),
         ("created_at", "STRING"), ("expires_at", "STRING"),
-        ("evidence_ref", "STRING"), ("synced_at", "STRING"),
+        ("evidence_ref", "STRING"), ("context_state", "STRING"),
+        ("synced_at", "STRING"),
     ],
     "risk_reports": [
         ("id", "STRING"), ("checkpoint_id", "STRING"), ("score", "DOUBLE"),
-        ("verdict", "STRING"), ("security_flags", "STRING"),
+        ("verdict", "STRING"), ("risk_flags", "STRING"),
         ("risk_count", "BIGINT"), ("critical_count", "BIGINT"),
-        ("generated_at", "STRING"), ("synced_at", "STRING"),
+        ("context_state", "STRING"), ("generated_at", "STRING"),
+        ("synced_at", "STRING"),
     ],
     "graph_snapshots": [
         ("id", "STRING"), ("symbol", "STRING"), ("checkpoint_id", "STRING"),
@@ -71,45 +79,58 @@ TABLES: dict[str, list[tuple[str, str]]] = {
 # even if Genie's NL parse wanders. CLAUDE.md section 8 asks for at least one
 # working live; these are the candidates.
 GENIE_QUERIES: dict[str, dict[str, str]] = {
+    # Pre-written so the demo has a guaranteed path even if Genie's NL parse
+    # wanders. They select structured columns only - the free-text columns these
+    # once joined on were removed by the privacy boundary.
     "unvalidated_security_assumptions": {
         "question": "Show checkpoints with unvalidated security assumptions",
         "sql": """
-SELECT c.id AS checkpoint_id, c.summary, a.text AS assumption,
-       a.category, a.confidence, a.decayed_confidence, a.expires_at
+SELECT c.id AS checkpoint_id, c.branch, a.assumption_text,
+       a.category, a.confidence, a.decayed_confidence, a.expires_at,
+       a.context_state
 FROM {schema}.assumptions a
 JOIN {schema}.checkpoints c ON c.id = a.checkpoint_id
 WHERE a.status != 'validated'
-  AND (a.category IN ('environment', 'dependency', 'contract')
-       OR lower(a.text) LIKE '%auth%' OR lower(a.text) LIKE '%token%'
-       OR lower(a.text) LIKE '%permission%' OR lower(a.text) LIKE '%secret%')
+  AND a.category IN ('environment', 'dependency', 'contract')
 ORDER BY a.decayed_confidence ASC
 """,
     },
     "stale_claims": {
         "question": "Which verified claims have gone stale since their checkpoint?",
         "sql": """
-SELECT g.symbol, g.checkpoint_id, g.recheck_status, g.captured_at, c.summary
+SELECT g.symbol, g.checkpoint_id, g.recheck_status, g.captured_at, c.branch
 FROM {schema}.graph_snapshots g
 JOIN {schema}.checkpoints c ON c.id = g.checkpoint_id
 WHERE g.recheck_status IN ('stale', 'contradicted')
 ORDER BY g.captured_at DESC
 """,
     },
+    "partial_context_reports": {
+        "question": "Which reports were built on redacted context?",
+        "sql": """
+SELECT r.checkpoint_id, r.verdict, r.score, r.context_state, r.generated_at
+FROM {schema}.risk_reports r
+WHERE r.context_state = 'partial' OR r.score IS NULL
+ORDER BY r.generated_at DESC
+""",
+    },
     "release_readiness": {
         "question": "What is the release-readiness trend across checkpoints?",
         "sql": """
-SELECT r.checkpoint_id, r.score, r.verdict, r.critical_count, r.generated_at
+SELECT r.checkpoint_id, r.score, r.verdict, r.critical_count,
+       r.context_state, r.generated_at
 FROM {schema}.risk_reports r
 ORDER BY r.generated_at DESC
 """,
     },
     "unsatisfied_requirements": {
-        "question": "Which requirements are contradicted or unverified?",
+        "question": "Which requirements are contradicted, unverified or redacted?",
         "sql": """
-SELECT checkpoint_id, text, status, rationale, evidence_ref
+SELECT checkpoint_id, requirement_text, status, evidence_ref, context_state
 FROM {schema}.requirements
-WHERE status IN ('contradicted', 'unverified')
-ORDER BY CASE status WHEN 'contradicted' THEN 0 ELSE 1 END, checkpoint_id
+WHERE status IN ('contradicted', 'unverified', 'redacted')
+ORDER BY CASE status WHEN 'contradicted' THEN 0 WHEN 'redacted' THEN 1 ELSE 2 END,
+         checkpoint_id
 """,
     },
 }
@@ -255,69 +276,98 @@ class DatabricksSync:
                           warehouse=self.http_path, synced_at=_now())
 
     def _collect_rows(self) -> dict[str, list[dict[str, Any]]]:
-        """Flatten ledger JSON records into table rows."""
+        """Flatten ledger records into table rows, through the privacy boundary.
+
+        Every row is built by `redact(destination="databricks")`, the same
+        function the Claude API path calls. Rows are then re-checked by
+        `assert_no_raw_text` before they can be written - Databricks is an
+        external service, and a schema change upstream must not be able to
+        reopen this path silently.
+        """
         now = _now()
         commit = self.ledger.head()
         out: dict[str, list[dict[str, Any]]] = {t: [] for t in TABLES}
 
+        def emit(table: str, payload: dict[str, Any], extra: dict[str, Any]) -> None:
+            safe, report = redact(payload, destination="databricks")
+            row = {**safe, **extra}
+            row.setdefault("context_state", report.context_state)
+            assert_no_raw_text(row, where=f"Databricks table {table}")
+            # Columns the table declares but this row lacks must still exist.
+            for name, _ in TABLES[table]:
+                row.setdefault(name, None)
+            out[table].append({k: row.get(k) for k, _ in TABLES[table]})
+
         for cp in self.ledger.read_all("checkpoints"):
-            out["checkpoints"].append({
-                "id": cp.get("id"), "session_id": cp.get("session_id"),
-                "branch": cp.get("branch"), "author": cp.get("author"),
-                "created_at": cp.get("created_at"),
+            emit("checkpoints", {
+                "checkpoint_id": cp.get("id"), "branch": cp.get("branch"),
+                "author": cp.get("author"), "created_at": cp.get("created_at"),
                 "files_touched": json.dumps(cp.get("files_touched") or []),
-                "summary": cp.get("summary"), "ledger_commit": commit,
-                "synced_at": now,
+            }, {
+                "id": cp.get("id"), "session_id": cp.get("session_id"),
+                "ledger_commit": commit, "synced_at": now,
             })
 
         for rec in self.ledger.read_all("requirements"):
             cid = rec.get("checkpoint_id")
+            state = rec.get("context_state") or "full"
             for req in (rec.get("requirements") or []):
-                out["requirements"].append({
-                    "id": f"{cid}:{req.get('id')}", "checkpoint_id": cid,
-                    "text": req.get("text"), "status": req.get("status"),
-                    "rationale": req.get("rationale"),
+                emit("requirements", {
+                    "checkpoint_id": cid,
+                    "requirement_text": req.get("text") or req.get("requirement_text"),
+                    "status": req.get("status"),
                     "evidence_ref": req.get("evidence_id"),
-                    "evidence_quote": req.get("evidence_quote"),
+                    "context_state": state,
+                }, {
+                    "id": f"{cid}:{req.get('id')}",
                     "ledger_commit": commit, "synced_at": now,
                 })
 
         for rec in self.ledger.read_all("assumptions"):
-            for a in (rec.get("assumptions") or [rec]):
+            state = rec.get("context_state") or "full"
+            for a in (rec.get("assumptions") or []):
                 if not isinstance(a, dict) or not a.get("text"):
                     continue
-                out["assumptions"].append({
-                    "id": a.get("id"), "checkpoint_id": rec.get("checkpoint_id"),
-                    "text": a.get("text"), "source": a.get("source"),
+                emit("assumptions", {
+                    "checkpoint_id": rec.get("checkpoint_id"),
+                    "assumption_text": a.get("text"),
                     "category": a.get("category"),
                     "confidence": _f(a.get("confidence")),
-                    "decayed_confidence": _f(a.get("decayed_confidence")),
                     "owner": a.get("owner"),
                     "status": a.get("status") or a.get("decay_status") or "unvalidated",
-                    "symbol": a.get("symbol"), "validation": a.get("validation"),
+                    "symbol": a.get("symbol"),
                     "created_at": a.get("created_at"), "expires_at": a.get("expires_at"),
-                    "evidence_ref": a.get("evidence_id"), "synced_at": now,
+                    "evidence_ref": a.get("evidence_id"),
+                    "context_state": state,
+                }, {
+                    "id": a.get("id"),
+                    "decayed_confidence": _f(a.get("decayed_confidence")),
+                    "synced_at": now,
                 })
 
         for rec in self.ledger.read_all("risk-reports"):
             risks = rec.get("risks") or []
-            sec = [r for r in risks if r.get("band") == "security"]
-            out["risk_reports"].append({
-                "id": rec.get("id"), "checkpoint_id": rec.get("checkpoint_id"),
+            flags = sorted({r.get("band") for r in risks if r.get("band")})
+            emit("risk_reports", {
+                "checkpoint_id": rec.get("checkpoint_id"),
                 "score": _f(rec.get("score")), "verdict": rec.get("verdict"),
-                "security_flags": json.dumps([r.get("title") for r in sec]),
-                "risk_count": len(risks),
+                "risk_flags": json.dumps(flags),
+                "context_state": rec.get("context_state") or "full",
+            }, {
+                "id": rec.get("id"), "risk_count": len(risks),
                 "critical_count": sum(1 for r in risks if r.get("severity") == "critical"),
                 "generated_at": rec.get("generated_at"), "synced_at": now,
             })
 
         for rec in self.ledger.read_all("graph-snapshots"):
-            out["graph_snapshots"].append({
-                "id": rec.get("id"), "symbol": rec.get("symbol"),
+            emit("graph_snapshots", {
                 "checkpoint_id": rec.get("checkpoint_id"),
+                "symbol": rec.get("symbol"),
+                "evidence_ref": rec.get("evidence_id"),
+            }, {
+                "id": rec.get("id"),
                 "blast_radius_json": json.dumps(rec.get("surface") or {}),
                 "head_sha": rec.get("head_sha"),
-                "evidence_ref": rec.get("evidence_id"),
                 "recheck_status": (rec.get("recheck") or {}).get("status"),
                 "captured_at": rec.get("captured_at"), "synced_at": now,
             })

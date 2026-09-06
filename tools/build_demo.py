@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from witness.agents import PERSONAS                      # noqa: E402
+from witness.agents import CAST, PERSONAS                      # noqa: E402
 from witness.databricks_sync import GENIE_QUERIES        # noqa: E402
 from witness.pipeline import Witness                     # noqa: E402
 
@@ -43,7 +43,7 @@ def capture(ledger_path: Path) -> dict:
     if ledger_path.exists():
         shutil.rmtree(ledger_path)
 
-    out: dict = {"/api/personas": {"personas": PERSONAS}}
+    out: dict = {"/api/personas": {"personas": PERSONAS, "cast": CAST}}
 
     # Checkpoint-time state: ingest the checkpoint and snapshot the blast radius.
     at_checkpoint = Witness(ROOT, ledger_path, fixture_dir=ROOT / "fixtures")
@@ -56,6 +56,7 @@ def capture(ledger_path: Path) -> dict:
     at_head = Witness(ROOT, ledger_path, fixture_dir=ROOT / "fixtures-head")
     out["POST /api/graph/recheck"] = at_head.recheck_symbol(SYMBOL, CHECKPOINT)
 
+    out["/api/context"] = at_head.context_report(CHECKPOINT)
     out["/api/status"] = at_head.status()
     out["/api/ledger"] = {**at_head.ledger.stats(),
                           "history": at_head.ledger.history(limit=40)}
@@ -96,7 +97,8 @@ function demoResolve(path, method) {
     if (path === '/api/run-all')           return DEMO['POST /api/run-all'];
     if (path === '/api/graph/snapshot')    return DEMO['POST /api/run-all'].snapshot;
     const stage = { '/api/audit': 'audit', '/api/watch': 'watch', '/api/archive': 'archive',
-                    '/api/haunt': 'haunt', '/api/handoff': 'handoff' }[path];
+                    '/api/haunt': 'haunt', '/api/handoff': 'handoff',
+                    '/api/warden': 'warden' }[path];
     if (stage) return DEMO['POST /api/run-all'][stage];
     if (path === '/api/referee') {
       const e = new Error('The Referee has no run to compare yet - it needs one Auditor pass '
@@ -105,6 +107,7 @@ function demoResolve(path, method) {
       throw e;
     }
   }
+  if (path.startsWith('/api/context/')) return DEMO['/api/context'];
   if (path.startsWith('/api/evidence/')) {
     const id = path.split('/').pop();
     const ev = DEMO._evidence[id];
@@ -138,31 +141,19 @@ BANNER = """<div class="demo-note">
 BANNER_CSS = """
 /* demo-build notice - deliberately not a card; it is an annotation on the page */
 .demo-note {
-  max-width: 1320px; margin: 18px auto -14px; padding: 12px 22px;
+  max-width: var(--max); margin: 18px auto -40px; padding: 12px var(--gut);
   display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
   font-size: 11px; line-height: 1.7; color: var(--ink-2);
-  border-left: 2px solid var(--amber);
+  border-left: 2px solid var(--stale);
 }
 .demo-note .demo-k {
-  font-size: 9px; letter-spacing: .24em; color: var(--amber); flex: none;
+  font-size: 9px; letter-spacing: .24em; color: var(--stale); flex: none;
 }
 .demo-note code {
   font-family: var(--mono); font-size: 10.5px; color: var(--ghost);
   background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 2px;
 }
 """
-
-REST_STRIP = """  setStrip('Audit pipeline',
-    live ? 'Select a checkpoint to begin'
-         : replaying
-           ? 'Entire CLI absent — replaying recorded command output from fixtures/'
-           : 'Entire CLI not detected and no fixtures recorded — no verdicts can be asserted',
-    'IDLE', 'idle');"""
-
-DEMO_STRIP = """  setStrip('Audit pipeline',
-    'Recorded run · select a checkpoint, or re-check validate_token below',
-    'DEMO', 'idle');"""
-
 
 def build(data: dict) -> str:
     front = ROOT / "frontend"
@@ -174,17 +165,24 @@ def build(data: dict) -> str:
     body = html.split("<body>", 1)[1].rsplit("</body>", 1)[0]
     body = body.replace('<script src="/assets/app.js"></script>', "")
     body = body.replace("<main id=\"top\">", "<main id=\"top\">\n" + BANNER, 1)
+    # The page loads force-graph and mascots as separate files; inline both.
+    vendor = (front / "assets" / "vendor" / "force-graph.min.js").read_text()
+    mascots = (front / "assets" / "mascots.js").read_text()
+    body = body.replace(
+        '<script src="/assets/vendor/force-graph.min.js"></script>', "")
+    body = body.replace('<script src="/assets/mascots.js"></script>', "")
+    body = body.replace('<script src="/assets/app.js"></script>', "")
     fonts = re.search(r'<link href="https://fonts\.googleapis[^>]+>', html).group(0)
 
-    js = DEMO_API + "\n" + js[js.index("const $  ="):]
-    if REST_STRIP in js:
-        js = js.replace(REST_STRIP, DEMO_STRIP)
+    js = DEMO_API + "\n" + js[js.index("const $ ="):]
 
     payload = json.dumps(data, separators=(",", ":"), default=str)
     return (
         f"<title>Witness</title>\n{fonts}\n"
         f"<style>\n{css}\n{BANNER_CSS}\n</style>\n"
         f"{body}\n"
+        f"<script>{vendor}</script>\n"
+        f"<script>{mascots}</script>\n"
         f"<script>window.__WITNESS_DEMO__ = {payload};</script>\n"
         f"<script>\n{js}\n</script>\n"
     )

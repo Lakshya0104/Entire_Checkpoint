@@ -140,6 +140,11 @@ def scan_and_redact(text: str) -> ScanResult:
             # For patterns with a capture group, only the group is the secret;
             # keeping the surrounding key name preserves readability.
             secret = m.group(1) if m.groups() else m.group(0)
+            # `secret = SOME_CONSTANT` assigns an identifier, not a credential.
+            # Real keys are not SCREAMING_SNAKE, and flagging every constant
+            # makes the security report too noisy to read.
+            if m.groups() and _ENV_NAME.match(secret) and secret.upper() == secret:
+                return m.group(0)
             fp = fingerprint(secret)
             findings.append(Finding(
                 kind=kind, fingerprint=fp, preview=secret[:4], detector="pattern",

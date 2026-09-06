@@ -32,6 +32,9 @@ SYNTHETIC_SECRETS = {
     "aws":        "AKIA" + "IOSFODNN7EXAMPLE",
     "databricks": "dapi" + "0123456789abcdef" * 2,
     "slack":      "xox" + "b-" + "1234567890-abcdefghijklmno",
+    # Opaque high-entropy blob, for the entropy sweep rather than a named
+    # pattern. Split like the rest so the file itself scans clean.
+    "opaque":     "xJ9kQm2vPz7Lw" + "R4tYb8NcF6hGd" + "3sEa1uZo5iVn0pXr",
 }
 
 
@@ -53,6 +56,8 @@ def test_git_sha_is_not_flagged():
     "WITNESS_ACCESS_TOKEN",              # env var NAME, not a value
     "DATABRICKS_SERVER_HOSTNAME",
     "WITNESS_FIXTURES=fixtures-head",    # assignment of a non-secret value
+    "secret = SYNTHETIC_SECRETS[key]",   # assigns an identifier, not a credential
+    "api_key = MY_CONSTANT_NAME",
     "test_hallucinated_citation_downgrades_auditor_finding",
 ])
 def test_entropy_sweep_does_not_flag_documentation(text):
@@ -62,7 +67,7 @@ def test_entropy_sweep_does_not_flag_documentation(text):
 
 @pytest.mark.parametrize("text", [
     "DATABRICKS_TOKEN=" + SYNTHETIC_SECRETS["databricks"],
-    "MY_KEY=xJ9kQm2vPz7LwR4tYb8NcF6hGd3sEa1uZo5iVn0pXr",
+    "MY_KEY=" + SYNTHETIC_SECRETS["opaque"],
 ])
 def test_secret_in_assignment_still_caught(text):
     """Narrowing the sweep must not open a hole on the right-hand side."""
@@ -222,7 +227,7 @@ def test_no_usable_evidence_means_no_verdict():
 def test_missing_api_key_is_degraded_not_guessed():
     runner = AgentRunner(api_key=None)
     ev = Evidence("e", [], "ok", 0, "some output", "", "", 0, "", ".")
-    res = runner.run("watchman", [ev])
+    res = runner.run("riskbot", [ev])
     assert res.degraded
     assert res.data["score"] is None
     assert res.data["verdict"] == "unverified"
@@ -238,9 +243,9 @@ def test_hallucinated_citation_downgrades_auditor_finding():
     assert "citation_error" in data["requirements"][0]
 
 
-def test_uncited_watchman_risk_is_dropped():
+def test_uncited_riskbot_risk_is_dropped():
     data = _enforce_citations(
-        "watchman",
+        "riskbot",
         {"risks": [{"title": "x", "severity": "critical", "evidence_id": "nope"}]},
         {"ev_real"},
     )

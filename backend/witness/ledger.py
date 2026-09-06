@@ -32,6 +32,7 @@ from .redaction import assert_clean, redact_obj, summarise
 SUBDIRS = (
     "checkpoints", "requirements", "assumptions",
     "risk-reports", "graph-snapshots", "evidence", "handoffs", "referee",
+    "warden",
 )
 
 

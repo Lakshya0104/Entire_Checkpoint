@@ -1,0 +1,20 @@
+{
+  "id": "ev_redacted",
+  "command": [
+    "entire",
+    "checkpoint",
+    "list",
+    "--json"
+  ],
+  "command_str": "entire checkpoint list --json",
+  "status": "ok",
+  "exit_code": 0,
+  "stdout": "{\n  \"checkpoints\": [\n    {\n      \"id\": \"cp_redacted\",\n      \"session_id\": \"[REDACTED]\",\n      \"branch\": \"feat/token-refresh\",\n      \"author\": \"claude-code\",\n      \"created_at\": \"2026-09-06T12:30:00Z\",\n      \"summary\": \"[REDACTED]\",\n      \"files_touched\": []\n    }\n  ]\n}",
+  "stderr": "",
+  "stdout_sha256": "760aad486f0576015ef75d49cd83cd6d37d74e57de50b56a9b2cf08f631d4f3c",
+  "duration_ms": 91,
+  "captured_at": "2026-09-06T12:30:00+00:00",
+  "cwd": ".",
+  "source": "live",
+  "secret_findings": []
+}

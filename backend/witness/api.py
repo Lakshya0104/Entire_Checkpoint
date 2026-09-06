@@ -68,8 +68,15 @@ def status(_: None = Gate) -> dict[str, Any]:
 
 @app.get("/api/personas")
 def personas(_: None = Gate) -> dict[str, Any]:
-    from .agents import PERSONAS
-    return {"personas": PERSONAS}
+    from .agents import CAST, PERSONAS
+    return {"personas": PERSONAS, "cast": CAST}
+
+
+@app.get("/api/context/{checkpoint_id}")
+def context(checkpoint_id: str, _: None = Gate) -> dict[str, Any]:
+    """The Full/Partial badge for a checkpoint's report screens."""
+    return get_witness().context_report(checkpoint_id)
+
 
 
 @app.get("/api/checkpoints")
@@ -158,6 +165,12 @@ def audit(body: CheckpointBody, _: None = Gate) -> dict[str, Any]:
 @app.post("/api/watch")
 def watch(body: CheckpointBody, _: None = Gate) -> dict[str, Any]:
     return get_witness().watch(body.checkpoint_id, symbol=body.symbol)
+
+
+@app.post("/api/warden")
+def warden(body: CheckpointBody, _: None = Gate) -> dict[str, Any]:
+    """The Warden's report on what the privacy boundary withheld."""
+    return get_witness().warden(body.checkpoint_id)
 
 
 @app.post("/api/archive")

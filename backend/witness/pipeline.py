@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .agents import AgentRunner, AgentResult, decay_assumptions
+from .agents import AgentRunner, AgentResult, CAST, decay_assumptions
 from .databricks_sync import DatabricksSync
 from .entire_adapter import (
     EntireAdapter, EvidenceStore, Evidence, parse_checkpoint_list,
@@ -33,6 +33,7 @@ from .graph_check import (
 )
 from .ledger import AuditLedger
 from .redaction import scan_and_redact, summarise
+from .privacy import RedactionReport, score_is_presentable
 
 
 def _now() -> str:
@@ -156,6 +157,9 @@ class Witness:
         payload = {
             "checkpoint_id": checkpoint_id, "label": label,
             "generated_at": _now(), **result.data,
+            "context_state": (result.redaction or {}).get("context_state", "partial"),
+            "context_badge": (result.redaction or {}).get("badge", "Partial — context unknown"),
+            "redaction": result.redaction,
             "agent": result.to_dict(),
         }
         name = checkpoint_id if label == "primary" else f"{checkpoint_id}__{label}"
@@ -180,7 +184,7 @@ class Witness:
             self.ledger.read("checkpoints", checkpoint_id) or {})
 
         result = self.agents.run(
-            "watchman", evidence,
+            "riskbot", evidence,
             context=f"Scoring release readiness for checkpoint {checkpoint_id}.",
             extra={
                 "auditor_requirements": audit_rec.get("requirements", []),
@@ -193,6 +197,9 @@ class Witness:
             "id": report_id, "checkpoint_id": checkpoint_id,
             "generated_at": _now(), "symbol": symbol,
             "secret_scan": secret_findings, **result.data,
+            "context_state": (result.redaction or {}).get("context_state", "partial"),
+            "context_badge": (result.redaction or {}).get("badge", "Partial — context unknown"),
+            "redaction": result.redaction,
             "agent": result.to_dict(),
         }
         prov = self.ledger.write(
@@ -205,13 +212,16 @@ class Witness:
     def archive(self, checkpoint_id: str) -> dict[str, Any]:
         evidence = self._checkpoint_evidence(checkpoint_id)
         result = self.agents.run(
-            "archivist", evidence,
+            "ledgerkeep", evidence,
             context=f"Extracting assumptions from checkpoint {checkpoint_id}.",
         )
         assumptions = decay_assumptions(result.data.get("assumptions", []))
         payload = {
             "checkpoint_id": checkpoint_id, "generated_at": _now(),
-            "assumptions": assumptions, "agent": result.to_dict(),
+            "assumptions": assumptions,
+            "context_state": (result.redaction or {}).get("context_state", "partial"),
+            "context_badge": (result.redaction or {}).get("badge", "Partial — context unknown"),
+            "agent": result.to_dict(),
         }
         prov = self.ledger.write(
             "assumptions", checkpoint_id, payload,
@@ -223,7 +233,7 @@ class Witness:
     def haunt(self, checkpoint_id: str) -> dict[str, Any]:
         evidence = self._checkpoint_evidence(checkpoint_id)
         result = self.agents.run(
-            "ghost", evidence,
+            "sleuth", evidence,
             context=f"Recovering abandoned work and dead ends from checkpoint "
                     f"{checkpoint_id}. Report only what was rejected or left "
                     f"unfinished, never the successful path.",
@@ -243,7 +253,7 @@ class Witness:
         asm_rec = self.ledger.read("assumptions", checkpoint_id) or {}
 
         result = self.agents.run(
-            "messenger", evidence,
+            "scribe", evidence,
             context=f"Writing the handoff packet for checkpoint {checkpoint_id}.",
             extra={
                 "requirements": audit_rec.get("requirements", []),
@@ -336,6 +346,44 @@ class Witness:
                 "before": before.get("requirements", []),
                 "after": after.get("requirements", [])}
 
+    # -- warden: audit the privacy boundary itself ---------------------------
+    def warden(self, checkpoint_id: str) -> dict[str, Any]:
+        """Report what the privacy boundary withheld, and what that costs.
+
+        The Warden does not decide policy - `privacy.redact` already did that
+        before any data moved. It states, for a reader of the report, which
+        conclusions the withheld fields make unsafe to draw.
+        """
+        evidence = self._checkpoint_evidence(checkpoint_id)
+        audit_rec = self.ledger.read("requirements", checkpoint_id) or {}
+        result = self.agents.run(
+            "warden", evidence,
+            context=f"Auditing the privacy boundary for checkpoint {checkpoint_id}.",
+            extra={"status": [r.get("status") for r in audit_rec.get("requirements", [])]},
+        )
+        payload = {
+            "checkpoint_id": checkpoint_id, "generated_at": _now(),
+            **result.data, "agent": result.to_dict(),
+        }
+        prov = self.ledger.write(
+            "warden", checkpoint_id, payload,
+            message=f"warden: privacy boundary report for {checkpoint_id}",
+        )
+        return {"result": result.to_dict(), "ledger": prov,
+                "context_state": (result.redaction or {}).get("context_state", "partial"),
+                "badge": (result.redaction or {}).get("badge", "Partial — context unknown")}
+
+    def context_report(self, checkpoint_id: str) -> dict[str, Any]:
+        """The Full/Partial badge every report screen shows.
+
+        Derived from what actually crossed the boundary on the last run, not
+        from a flag someone set by hand.
+        """
+        evidence = self._checkpoint_evidence(checkpoint_id)
+        from .agents import evidence_to_facts
+        _, report = evidence_to_facts(evidence)
+        return report.to_dict()
+
     # -- full run ------------------------------------------------------------
     def run_all(self, checkpoint_id: str, *, symbol: str | None = None) -> dict[str, Any]:
         out: dict[str, Any] = {"checkpoint_id": checkpoint_id, "started_at": _now()}
@@ -347,6 +395,8 @@ class Witness:
             out["snapshot"] = self.snapshot_symbol(symbol, checkpoint_id)
         out["watch"] = self.watch(checkpoint_id, symbol=symbol)
         out["handoff"] = self.handoff(checkpoint_id)
+        out["warden"] = self.warden(checkpoint_id)
+        out["context"] = self.context_report(checkpoint_id)
         out["databricks"] = self.databricks.sync().to_dict()
         out["finished_at"] = _now()
         out["ledger_head"] = self.ledger.head()
